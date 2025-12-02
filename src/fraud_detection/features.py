@@ -48,6 +48,11 @@ def add_history_features(df: pd.DataFrame, config: PipelineConfig = DEFAULT_PIPE
 
     # Ensure time-of-day features exist for downstream preprocessing
     df = add_time_features(df, config)
+    df["hist_velocity"] = (
+        group["timestamp_unix"].transform(lambda x: x.diff().fillna(0).rolling(config.history_window, min_periods=1).apply(lambda s: (s <= window_seconds).sum()))
+    )
+
+    df.drop(columns=["timestamp_unix"], inplace=True)
     return df
 
 
@@ -55,6 +60,11 @@ def build_preprocess_pipeline(df: pd.DataFrame, config: PipelineConfig = DEFAULT
     """Create a preprocessing pipeline with imputation and one-hot encoding."""
 
     df = add_time_features(df, config)
+    timestamp_col = config.timestamp_column
+    df = df.copy()
+    df[timestamp_col] = pd.to_datetime(df[timestamp_col])
+    df["hour"] = df[timestamp_col].dt.hour
+    df["dayofweek"] = df[timestamp_col].dt.dayofweek
 
     numeric_features = [
         config.amount_column,
