@@ -14,6 +14,48 @@ import pandas as pd
 from .config import DEFAULT_PIPELINE_CONFIG, PipelineConfig
 
 
+_TIMESTAMP_CANDIDATES = [
+    "timestamp",
+    "time",
+    "datetime",
+    "date",
+    "event_time",
+    "event_timestamp",
+    "transaction_time",
+    "transaction_timestamp",
+    "tx_datetime",
+    "tx_timestamp",
+    "step",
+]
+
+
+def _normalize_timestamp_column(df: pd.DataFrame, target: str) -> pd.DataFrame:
+    """Rename a timestamp-like column to the expected name.
+
+    Many public datasets ship with slightly different timestamp column names.
+    This helper performs a case-insensitive lookup across common alternatives
+    and renames the first match to ``target``. If no match is found, a
+    ``ValueError`` with available columns is raised to give the user an
+    actionable message.
+    """
+
+    if target in df.columns:
+        return df
+
+    lower_map = {c.lower(): c for c in df.columns}
+    for name in _TIMESTAMP_CANDIDATES:
+        if name.lower() in lower_map:
+            return df.rename(columns={lower_map[name.lower()]: target})
+
+    available = ", ".join(df.columns)
+    raise ValueError(
+        f"Timestamp column '{target}' not found. "
+        f"Available columns: {available}. "
+        "Use a column named 'timestamp' or one of the common alternatives "
+        "(datetime, event_time, transaction_time, step), or rename the column before loading."
+    )
+
+
 def load_transactions(path: str | Path, config: PipelineConfig = DEFAULT_PIPELINE_CONFIG) -> pd.DataFrame:
     """Load transactions from CSV or zipped CSV.
 
@@ -26,8 +68,8 @@ def load_transactions(path: str | Path, config: PipelineConfig = DEFAULT_PIPELIN
     if path.suffix == ".zip":
         compression = "zip"
     df = pd.read_csv(path, compression=compression)
-    if config.timestamp_column in df.columns:
-        df[config.timestamp_column] = pd.to_datetime(df[config.timestamp_column])
+    df = _normalize_timestamp_column(df, config.timestamp_column)
+    df[config.timestamp_column] = pd.to_datetime(df[config.timestamp_column])
     return df
 
 
@@ -40,8 +82,8 @@ def unzip_and_load(zip_path: str | Path, inner_csv: Optional[str] = None, config
         with zf.open(name) as handle:
             content = handle.read()
     df = pd.read_csv(io.BytesIO(content))
-    if config.timestamp_column in df.columns:
-        df[config.timestamp_column] = pd.to_datetime(df[config.timestamp_column])
+    df = _normalize_timestamp_column(df, config.timestamp_column)
+    df[config.timestamp_column] = pd.to_datetime(df[config.timestamp_column])
     return df
 
 
