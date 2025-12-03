@@ -9,6 +9,7 @@ import pandas as pd
 from sklearn.inspection import permutation_importance
 
 from .config import DEFAULT_PIPELINE_CONFIG, PipelineConfig
+from .features import add_history_features
 from .rules import RULE_COLUMNS
 
 
@@ -18,9 +19,22 @@ EXPLANATION_COLUMNS = ["fraud_score", "is_suspicious", "explanation"]
 def compute_feature_importance(model, df: pd.DataFrame, config: PipelineConfig = DEFAULT_PIPELINE_CONFIG) -> Dict[str, float]:
     """Compute permutation importance for fitted pipeline."""
 
-    df_proc = df.copy()
+    df_proc = add_history_features(df, config)
     y_dummy = np.zeros(len(df_proc))
-    result = permutation_importance(model, df_proc, y_dummy, scoring=None, n_repeats=3, random_state=42)
+
+    def _anomaly_score(estimator, X, y=None):
+        raw = estimator.decision_function(X)
+        scores = (raw.max() - raw)
+        scores = (scores - scores.min()) / (scores.max() - scores.min() + 1e-9)
+        return float(np.mean(scores))
+    result = permutation_importance(
+        model,
+        df_proc,
+        y_dummy,
+        scoring=_anomaly_score,
+        n_repeats=3,
+        random_state=42,
+    )
     feature_names = model["preprocess"].get_feature_names_out()
     importance = dict(zip(feature_names, result.importances_mean))
     return importance
