@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
+from pandas.api import types as pdt
 
 from .config import DEFAULT_PIPELINE_CONFIG, DEFAULT_RULE_CONFIG, PipelineConfig, RuleConfig
 
@@ -23,6 +24,12 @@ def apply_rules(
     category = pipeline_config.category_column
     timestamp = pipeline_config.timestamp_column
     customer = pipeline_config.customer_column
+
+    # Normalize dtypes to avoid runtime errors when inputs are strings or mixed types
+    if timestamp in df.columns and not pdt.is_datetime64_any_dtype(df[timestamp]):
+        df[timestamp] = pd.to_datetime(df[timestamp], errors="coerce")
+    df[timestamp] = df[timestamp].fillna(pd.Timestamp(0))
+    df[category] = df[category].astype(str)
 
     df["rule_high_amount"] = df[amount] > rule_config.high_amount_threshold
     df["rule_risky_country"] = df[country].isin(rule_config.risky_countries)

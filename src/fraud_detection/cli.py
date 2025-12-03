@@ -9,6 +9,7 @@ from typing import Optional
 import typer
 
 from .config import DEFAULT_MODEL_CONFIG, DEFAULT_PIPELINE_CONFIG, DEFAULT_RULE_CONFIG
+from .models import AnomalyModel
 from .data import generate_synthetic_transactions, load_transactions
 from .forecast import forecast_next_week
 from .pipeline import evaluate_model, export_results, score_transactions, train_model
@@ -81,7 +82,7 @@ def evaluate(input_csv: Optional[str] = None, threshold: float = 0.6):
         df = load_transactions(input_csv, config=DEFAULT_PIPELINE_CONFIG)
     else:
         df = generate_synthetic_transactions(config=DEFAULT_PIPELINE_CONFIG)
-    model = train_model(df, model_config=DEFAULT_MODEL_CONFIG, pipeline_config=DEFAULT_PIPELINE_CONFIG)
+    model = AnomalyModel(DEFAULT_MODEL_CONFIG, DEFAULT_PIPELINE_CONFIG)
     metrics = evaluate_model(model, df, threshold=threshold, pipeline_config=DEFAULT_PIPELINE_CONFIG)
     typer.echo(json.dumps(metrics, indent=2))
 
