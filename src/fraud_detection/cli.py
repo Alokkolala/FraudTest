@@ -28,11 +28,23 @@ def generate_synthetic(output: str = "data/synthetic.csv", rows: int = 5000, fra
 
 
 @app.command()
-def train(input_csv: Optional[str] = None, model_path: str = "artifacts/model.pkl"):
+def train(
+    input_csv: Optional[str] = None,
+    model_path: str = "artifacts/model.pkl",
+    limit_rows: Optional[int] = typer.Option(None, help="Read only the first N rows from the CSV for quick tests."),
+    sample_frac: Optional[float] = typer.Option(None, help="Randomly sample a fraction of rows (e.g., 0.1 for 10%)."),
+    chunk_size: Optional[int] = typer.Option(None, help="Stream the CSV in chunks to train on large files without loading all rows."),
+):
     """Train the anomaly model. If no input is provided, synthetic data is used."""
 
     if input_csv:
-        df = load_transactions(input_csv, config=DEFAULT_PIPELINE_CONFIG)
+        df = load_transactions(
+            input_csv,
+            config=DEFAULT_PIPELINE_CONFIG,
+            limit_rows=limit_rows,
+            sample_frac=sample_frac,
+            chunk_size=chunk_size,
+        )
     else:
         df = generate_synthetic_transactions(config=DEFAULT_PIPELINE_CONFIG)
     model = train_model(df, model_config=DEFAULT_MODEL_CONFIG, pipeline_config=DEFAULT_PIPELINE_CONFIG)
@@ -51,10 +63,19 @@ def score(
     model_path: Optional[str] = None,
     threshold: float = 0.6,
     compute_importance: bool = False,
+    limit_rows: Optional[int] = typer.Option(None, help="Read only the first N rows for a quick smoke test."),
+    sample_frac: Optional[float] = typer.Option(None, help="Randomly sample a fraction of rows before scoring."),
+    chunk_size: Optional[int] = typer.Option(None, help="Stream and sample large CSVs to keep memory usage low."),
 ):
     """Score transactions and export fraud results."""
 
-    df = load_transactions(input_csv, config=DEFAULT_PIPELINE_CONFIG)
+    df = load_transactions(
+        input_csv,
+        config=DEFAULT_PIPELINE_CONFIG,
+        limit_rows=limit_rows,
+        sample_frac=sample_frac,
+        chunk_size=chunk_size,
+    )
     if model_path:
         import joblib
 
@@ -75,11 +96,23 @@ def score(
 
 
 @app.command()
-def evaluate(input_csv: Optional[str] = None, threshold: float = 0.6):
+def evaluate(
+    input_csv: Optional[str] = None,
+    threshold: float = 0.6,
+    limit_rows: Optional[int] = typer.Option(None, help="Read only the first N rows for validation."),
+    sample_frac: Optional[float] = typer.Option(None, help="Randomly sample a fraction of rows before evaluation."),
+    chunk_size: Optional[int] = typer.Option(None, help="Stream large CSVs while sampling."),
+):
     """Evaluate the model using ROC-AUC, PR-AUC, recall@10%, and flagged rate."""
 
     if input_csv:
-        df = load_transactions(input_csv, config=DEFAULT_PIPELINE_CONFIG)
+        df = load_transactions(
+            input_csv,
+            config=DEFAULT_PIPELINE_CONFIG,
+            limit_rows=limit_rows,
+            sample_frac=sample_frac,
+            chunk_size=chunk_size,
+        )
     else:
         df = generate_synthetic_transactions(config=DEFAULT_PIPELINE_CONFIG)
     model = AnomalyModel(DEFAULT_MODEL_CONFIG, DEFAULT_PIPELINE_CONFIG)
@@ -88,10 +121,24 @@ def evaluate(input_csv: Optional[str] = None, threshold: float = 0.6):
 
 
 @app.command()
-def forecast(input_csv: str, model_path: Optional[str] = None, threshold: float = 0.6, output_csv: str = "data/forecast.csv"):
+def forecast(
+    input_csv: str,
+    model_path: Optional[str] = None,
+    threshold: float = 0.6,
+    output_csv: str = "data/forecast.csv",
+    limit_rows: Optional[int] = typer.Option(None, help="Read only the first N rows for fast forecasting."),
+    sample_frac: Optional[float] = typer.Option(None, help="Randomly sample rows before forecasting."),
+    chunk_size: Optional[int] = typer.Option(None, help="Stream large CSVs while sampling."),
+):
     """Predict fraud propensity per customer for the next 7 days (naive baseline)."""
 
-    df = load_transactions(input_csv, config=DEFAULT_PIPELINE_CONFIG)
+    df = load_transactions(
+        input_csv,
+        config=DEFAULT_PIPELINE_CONFIG,
+        limit_rows=limit_rows,
+        sample_frac=sample_frac,
+        chunk_size=chunk_size,
+    )
     if model_path:
         import joblib
 

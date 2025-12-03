@@ -25,6 +25,27 @@ python -m fraud_detection.cli generate-synthetic --output data/synth.csv --rows 
 python -m fraud_detection.cli train --input-csv data/synth.csv --model-path artifacts/model.pkl
 ```
 
+Обучение/скоринг на крупных файлах (PaySim ~400 МБ):
+```bash
+# потоковое чтение и подсэмплирование, чтобы не держать весь файл в памяти
+python -m fraud_detection.cli train \
+  --input-csv path/to/paysim.csv \
+  --chunk-size 200000 \
+  --sample-frac 0.2 \
+  --model-path artifacts/model.pkl
+
+# быстрый дымовой тест только на первых 50k строках
+python -m fraud_detection.cli score \
+  --input-csv path/to/paysim.csv \
+  --model-path artifacts/model.pkl \
+  --limit-rows 50000 \
+  --output-csv data/results_sample.csv
+```
+Опции управления размером выборки:
+- `--chunk-size` — читает CSV частями и применяет подсэмплирование к каждой части.
+- `--sample-frac` — случайно сохраняет указанную долю строк (например, 0.2 = 20%).
+- `--limit-rows` — ограничивает число прочитанных строк для быстрых проверок.
+
 Скоринг нового файла (CSV или ZIP с CSV):
 ```bash
 python -m fraud_detection.cli score --input-csv your_transactions.csv --model-path artifacts/model.pkl --output-csv data/results.csv --threshold 0.6

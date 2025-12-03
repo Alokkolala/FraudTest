@@ -124,18 +124,56 @@ def _standardize_schema(df: pd.DataFrame, config: PipelineConfig) -> pd.DataFram
     return df
 
 
-def load_transactions(path: str | Path, config: PipelineConfig = DEFAULT_PIPELINE_CONFIG) -> pd.DataFrame:
-    """Load transactions from CSV or zipped CSV.
+def load_transactions(
+    path: str | Path,
+    config: PipelineConfig = DEFAULT_PIPELINE_CONFIG,
+    limit_rows: Optional[int] = None,
+    sample_frac: Optional[float] = None,
+    random_state: int = 42,
+    chunk_size: Optional[int] = None,
+) -> pd.DataFrame:
+    """Load transactions from CSV or zipped CSV with optional sampling.
 
-    The loader infers compression from the file name and ensures that the
-    timestamp column is parsed as datetime.
+    Parameters
+    ----------
+    path: str or Path
+        CSV file path. ``.zip`` archives are supported.
+    limit_rows: int, optional
+        If provided, only the first ``limit_rows`` rows are read (helpful when
+        quickly validating very large datasets such as 400MB PaySim files).
+    sample_frac: float, optional
+        Fraction of rows to randomly sample. When combined with ``chunk_size``,
+        sampling is performed per-chunk to keep memory usage bounded.
+    random_state: int
+        Reproducible seed for sampling.
+    chunk_size: int, optional
+        If set, the CSV is streamed in chunks of this many rows to avoid
+        loading the entire file into memory. This is recommended for datasets
+        hundreds of megabytes in size.
     """
 
     path = Path(path)
-    compression = None
-    if path.suffix == ".zip":
-        compression = "zip"
-    df = pd.read_csv(path, compression=compression)
+    compression = "zip" if path.suffix == ".zip" else None
+
+    if chunk_size:
+        sampled_chunks = []
+        for chunk in pd.read_csv(path, compression=compression, chunksize=chunk_size):
+            if limit_rows is not None and len(sampled_chunks) * chunk_size >= limit_rows:
+                break
+            if sample_frac:
+                chunk = chunk.sample(frac=sample_frac, random_state=random_state)
+            sampled_chunks.append(chunk)
+        if not sampled_chunks:
+            return pd.DataFrame()
+        df = pd.concat(sampled_chunks, ignore_index=True)
+    else:
+        read_kwargs = {"compression": compression}
+        if limit_rows:
+            read_kwargs["nrows"] = limit_rows
+        df = pd.read_csv(path, **read_kwargs)
+        if sample_frac:
+            df = df.sample(frac=sample_frac, random_state=random_state)
+
     df = _standardize_schema(df, config)
     df[config.timestamp_column] = pd.to_datetime(df[config.timestamp_column])
     return df
